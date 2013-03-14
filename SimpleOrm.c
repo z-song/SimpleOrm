@@ -293,7 +293,7 @@ PHP_METHOD(SimpleOrm, field)
 }
 /* }}} */
 
-/* {{{ proto public SimpleOrm::select(string fields)
+/* {{{ proto public SimpleOrm::where(string where)
 */
 PHP_METHOD(SimpleOrm, where)
 {
@@ -305,11 +305,11 @@ PHP_METHOD(SimpleOrm, where)
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|s", &where, &where_len) == FAILURE) {
 		return;
 	}
-	
-	smart_str_appendl(&implstr, "WHERE ", sizeof("WHERE ")-1);
-	smart_str_appendl(&implstr, where, sizeof(where));
+
 	self=getThis();
 	if(ZEND_NUM_ARGS()==1){
+		smart_str_appendl(&implstr, "WHERE ", sizeof("WHERE ")-1);
+		smart_str_appendl(&implstr, where, sizeof(where));
 		zend_update_property_string(Z_OBJCE_P(self), self, ZEND_STRL("where"), implstr.c TSRMLS_DC);
 	}
 	
@@ -346,28 +346,26 @@ PHP_METHOD(SimpleOrm, limit)
 {
 	smart_str implstr = {0};
 	long offset, length;
-	
+	int str_len;
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l|l", &offset, &length) == FAILURE) {
 		return;
 	}
 	
 	char stmp[MAX_LENGTH_OF_LONG + 1];
-	int str_len = slprintf(stmp, sizeof(stmp), "LIMIT ");
-	smart_str_appendl(&implstr, stmp, str_len);
-
 	if (ZEND_NUM_ARGS()==1){
-		int str_len = slprintf(stmp, sizeof(stmp), "%d", offset);
+		str_len = slprintf(stmp, sizeof(stmp), "LIMIT %d", offset);
 	}else if(ZEND_NUM_ARGS()==2){
-		int str_len = slprintf(stmp, sizeof(stmp), "%d,%d", offset, length);
+		str_len = slprintf(stmp, sizeof(stmp), "LIMIT %d,%d", offset, length);
 	}
 	smart_str_appendl(&implstr, stmp, str_len);
+	smart_str_0(&implstr);
 	zend_update_property_string(Z_OBJCE_P(getThis()), getThis(), ZEND_STRL("limit"), implstr.c TSRMLS_DC);
 	
 	RETURN_ZVAL(getThis(), 1, 0);
 }
 /* }}} */
 
-/* {{{ proto public SimpleOrm::exec(string query)
+/* {{{ proto public SimpleOrm::find(string query)
 */
 PHP_METHOD(SimpleOrm, find)
 {
