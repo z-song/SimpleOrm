@@ -48,7 +48,10 @@ PHP_METHOD(SimpleOrm, query);
 PHP_METHOD(SimpleOrm, exec);
 PHP_METHOD(SimpleOrm, select);
 PHP_METHOD(SimpleOrm, find);
-
+PHP_METHOD(SimpleOrm, field);
+PHP_METHOD(SimpleOrm, where);
+PHP_METHOD(SimpleOrm, order);
+PHP_METHOD(SimpleOrm, limit);
 
 PHP_SIMPLEORM_API zval * pdo_query(char * query TSRMLS_DC);
 PHP_SIMPLEORM_API int pdo_exec(char * query TSRMLS_DC);
