@@ -409,10 +409,10 @@ PHP_METHOD(SimpleOrm, find)
 					smart_str_appendl(&implstr, ",", sizeof(",")-1);
 			}
 			smart_str_0(&implstr);
-			sprintf(sql, "SELECT %s FROM `%s` WHERE `%s` IN (%s);",Z_STRVAL_P(field) , Z_STRVAL_P(table), Z_STRVAL_P(primary_key), implstr.c);
+			sprintf(sql, "SELECT %s FROM `%s` WHERE `%s` IN (%s);", Z_STRVAL_P(field), Z_STRVAL_P(table), Z_STRVAL_P(primary_key), implstr.c);
 		}
 	}else{
-		sprintf(sql, "SELECT %s FROM `%s` %s %s %s;",Z_STRVAL_P(field) , Z_STRVAL_P(table), Z_STRVAL_P(where), Z_STRVAL_P(order), Z_STRVAL_P(limit));
+		sprintf(sql, "SELECT %s FROM `%s` %s %s %s;", Z_STRVAL_P(field), Z_STRVAL_P(table), Z_STRVAL_P(where), Z_STRVAL_P(order), Z_STRVAL_P(limit));
 	}
 	stmt = pdo_query(sql);
 	
