@@ -55,6 +55,8 @@ PHP_METHOD(SimpleOrm, limit);
 
 PHP_SIMPLEORM_API zval * pdo_query(char * query TSRMLS_DC);
 PHP_SIMPLEORM_API int pdo_exec(char * query TSRMLS_DC);
+PHP_SIMPLEORM_API zval * pdo_errorCode();
+PHP_SIMPLEORM_API zval * pdo_errorInfo();
 
 /* 
   	Declare any global variables you may need between the BEGIN
