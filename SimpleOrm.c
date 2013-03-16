@@ -63,6 +63,10 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_string, 0, 0, 1)
 	ZEND_ARG_INFO(0, string)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_insert, 0, 0, 1)
+	ZEND_ARG_INFO(0, string)
+ZEND_END_ARG_INFO()
+
 /* {{{ SimpleOrm_functions[]
  *
  * Every user visible function must have an entry in SimpleOrm_functions[].
@@ -78,6 +82,9 @@ const zend_function_entry SimpleOrm_methods[] = {
 	PHP_ME(SimpleOrm, where,	 	arginfo_string, 		ZEND_ACC_PUBLIC)
 	PHP_ME(SimpleOrm, order,	 	arginfo_string, 		ZEND_ACC_PUBLIC)
 	PHP_ME(SimpleOrm, limit,	 	arginfo_string, 		ZEND_ACC_PUBLIC)
+	
+	PHP_ME(SimpleOrm, insert,	 	arginfo_insert, 		ZEND_ACC_PUBLIC)
+	PHP_ME(SimpleOrm, insertBatch,	arginfo_insert, 		ZEND_ACC_PUBLIC)
 	{NULL, NULL, NULL}
 };
 /* }}} */
@@ -394,28 +401,9 @@ PHP_METHOD(SimpleOrm, find)
 		if(Z_TYPE_P(query)==IS_LONG){
 			sprintf(sql, "%s %s FROM `%s` WHERE %s=%d;",Z_STRVAL_P(action),Z_STRVAL_P(field), Z_STRVAL_P(table), Z_STRVAL_P(primary_key), Z_LVAL_P(query));
 		}else if(Z_TYPE_P(query)==IS_ARRAY){
-			HashTable *query_hash;
-			HashPosition pos;
-			zval **element;
-			smart_str implstr = {0};
-			int i=0;
-			
-			query_hash=Z_ARRVAL_P(query);
-			int numelems = zend_hash_num_elements(query_hash);
-			for (zend_hash_internal_pointer_reset_ex(query_hash, &pos);
-				zend_hash_get_current_data_ex(query_hash, (void **) &element, &pos) == SUCCESS;
-				zend_hash_move_forward_ex(query_hash, &pos)
-			) {
-				if(Z_TYPE_PP(element)==IS_LONG){
-					char stmp[MAX_LENGTH_OF_LONG + 1];
-					int str_len = slprintf(stmp, sizeof(stmp), "%ld", Z_LVAL_PP(element));
-					smart_str_appendl(&implstr, stmp, str_len);
-				}
-				if(++i != numelems)
-					smart_str_appendl(&implstr, ",", sizeof(",")-1);
-			}
-			smart_str_0(&implstr);
-			sprintf(sql, "%s %s FROM `%s` WHERE `%s` IN (%s);",Z_STRVAL_P(action), Z_STRVAL_P(field), Z_STRVAL_P(table), Z_STRVAL_P(primary_key), implstr.c);
+			zval *Pkeys;
+			Pkeys=join(",", query, 0);
+			sprintf(sql, "%s %s FROM `%s` WHERE `%s` IN (%s);",Z_STRVAL_P(action), Z_STRVAL_P(field), Z_STRVAL_P(table), Z_STRVAL_P(primary_key), Z_STRVAL_P(Pkeys));
 		}
 	}else{
 		sprintf(sql, "%s %s FROM `%s` %s %s %s;",Z_STRVAL_P(action), Z_STRVAL_P(field), Z_STRVAL_P(table), Z_STRVAL_P(where), Z_STRVAL_P(order), Z_STRVAL_P(limit));
@@ -426,15 +414,171 @@ PHP_METHOD(SimpleOrm, find)
 }
 /* }}} */
 
-
+/* {{{ proto public SimpleOrm::insert(string query)
+*/
 PHP_METHOD(SimpleOrm, insert)
 {
-	zval *stmt, *query, *action, *field, *table, *primary_key, *self=NULL, *where, *order, *limit;
+	zval *insert, *action, *fields, *values, *self=NULL, *rows;
+	char *table;
 	char sql[30];
-	int query_len, rows;
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|z", &query) == FAILURE) {
+	int table_len;
+	
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "sz", &table, &table_len, &values) == FAILURE) {
 		return;
 	}
+
+	self=getThis();
+	zend_update_property_string(Z_OBJCE_P(self), self, ZEND_STRL("action"), "INSERT" TSRMLS_DC);
+	
+	if(Z_TYPE_P(values)==IS_ARRAY){
+		zval *fields, *value;
+		
+		fields=join(",", get_array_keys(values), 0);
+		value=join(",", values, 1);
+		sprintf(sql, "INSERT INTO `%s`(%s) VALUES (%s);", table, Z_STRVAL_P(fields), Z_STRVAL_P(value));
+		rows=pdo_exec(sql);
+	}else{
+		
+	}
+	RETURN_ZVAL(rows, 1, 0);
+}
+/* }}} */
+
+PHP_METHOD(SimpleOrm, insertBatch)
+{
+	zval *insert, *action, *fields, *values, *self=NULL, *rows, **element, *stmt, *table_name;
+	char sql[30], *table;
+	int table_len, query_len;
+	HashTable *value_hash;
+	HashPosition pos;
+	
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "sz", &table, &table_len, &values) == FAILURE) {
+		return;
+	}
+	
+	MAKE_STD_ZVAL(table_name);
+	ZVAL_STRING(table_name, table, 0);
+	
+	self=getThis();
+	value_hash=Z_ARRVAL_P(values);
+	for (zend_hash_internal_pointer_reset_ex(value_hash, &pos);
+		zend_hash_get_current_data_ex(value_hash, (void **)&element, &pos) == SUCCESS;
+		zend_hash_move_forward_ex(value_hash, &pos)
+	) {
+		zend_call_method(&self, Z_OBJCE_P(self), NULL, ZEND_STRL("insert"), &stmt, 2, table_name, *element, NULL TSRMLS_CC);
+	}
+}
+
+PHP_SIMPLEORM_API zval * get_array_keys(zval * array TSRMLS_DC){
+	zval *keys, **element;
+	HashTable *arr_hash;
+	HashPosition pos;
+	char *string_key;
+	uint string_key_len;
+	ulong num_key;
+	
+	ALLOC_INIT_ZVAL(keys);
+	array_init(keys);
+	
+	arr_hash=Z_ARRVAL_P(array);
+	for (zend_hash_internal_pointer_reset_ex(arr_hash, &pos);
+		zend_hash_get_current_data_ex(arr_hash, (void **) &element, &pos) == SUCCESS;
+		zend_hash_move_forward_ex(arr_hash, &pos)
+	) {
+		switch (zend_hash_get_current_key_ex(arr_hash, &string_key, &string_key_len, &num_key, 0, &pos)) {
+			case HASH_KEY_IS_STRING:
+				add_next_index_stringl(keys, string_key, string_key_len - 1, 1);
+				break;
+			case HASH_KEY_IS_LONG:
+				add_next_index_long(keys, num_key);
+		}
+	}
+	
+	return keys;
+}
+
+PHP_SIMPLEORM_API zval * join(char *delim, zval *arr, int type TSRMLS_DC)
+{
+	zval         **tmp;
+	HashPosition   pos;
+	smart_str      implstr = {0};
+	int            numelems, i = 0;
+	zval tmp_val;
+	int str_len;
+	zval *return_val;
+
+	numelems = zend_hash_num_elements(Z_ARRVAL_P(arr));
+	if (numelems == 0) {
+		return return_val;
+	}
+
+	zend_hash_internal_pointer_reset_ex(Z_ARRVAL_P(arr), &pos);
+	while (zend_hash_get_current_data_ex(Z_ARRVAL_P(arr), (void **) &tmp, &pos) == SUCCESS) {
+		switch ((*tmp)->type) {
+			case IS_STRING:{
+					if(type==1){
+						char buff[MAX_LENGTH_OF_LONG + 1];
+						int len;
+						len=sprintf(buff, "'%s'", Z_STRVAL_PP(tmp));
+						smart_str_appendl(&implstr, buff, len);
+					}else{
+						smart_str_appendl(&implstr, Z_STRVAL_PP(tmp), Z_STRLEN_PP(tmp));
+					}
+				}
+				break;
+			case IS_LONG: {
+					char stmp[MAX_LENGTH_OF_LONG + 1];
+					str_len = slprintf(stmp, sizeof(stmp), "%ld", Z_LVAL_PP(tmp));
+					smart_str_appendl(&implstr, stmp, str_len);
+				}
+				break;
+			case IS_BOOL:
+				if (Z_LVAL_PP(tmp) == 1) {
+					smart_str_appendl(&implstr, "1", sizeof("1")-1);
+				}
+				break;
+			case IS_NULL:
+				break;
+			case IS_DOUBLE: {
+					char *stmp;
+					str_len = spprintf(&stmp, 0, "%.*G", (int) EG(precision), Z_DVAL_PP(tmp));
+					smart_str_appendl(&implstr, stmp, str_len);
+					efree(stmp);
+				}
+				break;
+			case IS_OBJECT: {
+					int copy;
+					zval expr;
+					zend_make_printable_zval(*tmp, &expr, &copy);
+					smart_str_appendl(&implstr, Z_STRVAL(expr), Z_STRLEN(expr));
+					if (copy) {
+						zval_dtor(&expr);
+					}
+				}
+				break;
+			default:
+				tmp_val = **tmp;
+				zval_copy_ctor(&tmp_val);
+				convert_to_string(&tmp_val);
+				smart_str_appendl(&implstr, Z_STRVAL(tmp_val), Z_STRLEN(tmp_val));
+				zval_dtor(&tmp_val);
+				break;
+		}
+		if (++i != numelems) {
+			smart_str_appendl(&implstr, delim, strlen(delim));
+		}
+		zend_hash_move_forward_ex(Z_ARRVAL_P(arr), &pos);
+	}
+
+	smart_str_0(&implstr);
+	if (implstr.len) {
+		MAKE_STD_ZVAL(return_val);
+		ZVAL_STRING(return_val, implstr.c, 0);
+	} else {
+		smart_str_free(&implstr);
+	}
+	
+	return return_val;
 }
 
 
@@ -451,14 +595,12 @@ PHP_SIMPLEORM_API zval * pdo_query(char *query TSRMLS_DC){
 	
 	if(Z_TYPE_P(stmt)==IS_BOOL){
 		stmt=pdo_errorInfo();
-		//php_error_docref(NULL TSRMLS_CC, E_WARNING, "query error!");
 		return stmt;
 	}
-	pdo_errorCode();
 	return stmt;
 }
 
-PHP_SIMPLEORM_API int pdo_exec(char * query TSRMLS_DC){
+PHP_SIMPLEORM_API zval * pdo_exec(char * query TSRMLS_DC){
 	zval *pdo, *stmt, *instance, *sql, *rows;
 
 	MAKE_STD_ZVAL(sql);
@@ -468,7 +610,12 @@ PHP_SIMPLEORM_API int pdo_exec(char * query TSRMLS_DC){
 	zend_call_method(&pdo, Z_OBJCE_P(pdo), NULL, ZEND_STRL("exec"), &rows, 1, sql, NULL TSRMLS_CC);
 	zval_ptr_dtor(sql);
 	
-	return Z_LVAL_P(rows);
+	if(Z_TYPE_P(rows)==IS_BOOL){
+		rows=pdo_errorInfo();
+		return rows;
+	}
+	
+	return rows;
 }
 
 PHP_SIMPLEORM_API zval * pdo_errorCode(){

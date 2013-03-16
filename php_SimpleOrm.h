@@ -52,11 +52,16 @@ PHP_METHOD(SimpleOrm, field);
 PHP_METHOD(SimpleOrm, where);
 PHP_METHOD(SimpleOrm, order);
 PHP_METHOD(SimpleOrm, limit);
+PHP_METHOD(SimpleOrm, insert);
+PHP_METHOD(SimpleOrm, insertBatch);
 
 PHP_SIMPLEORM_API zval * pdo_query(char * query TSRMLS_DC);
-PHP_SIMPLEORM_API int pdo_exec(char * query TSRMLS_DC);
+PHP_SIMPLEORM_API zval * pdo_exec(char * query TSRMLS_DC);
 PHP_SIMPLEORM_API zval * pdo_errorCode();
 PHP_SIMPLEORM_API zval * pdo_errorInfo();
+
+PHP_SIMPLEORM_API zval * get_array_keys(zval * array TSRMLS_DC);
+PHP_SIMPLEORM_API zval * join(char *delim, zval *arr, int type TSRMLS_DC);
 
 /* 
   	Declare any global variables you may need between the BEGIN
