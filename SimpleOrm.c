@@ -67,6 +67,17 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_insert, 0, 0, 1)
 	ZEND_ARG_INFO(0, string)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_update, 0, 0, 1)
+	ZEND_ARG_INFO(0, table)
+	ZEND_ARG_INFO(0, data)
+	ZEND_ARG_INFO(0, condition)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_delete, 0, 0, 1)
+	ZEND_ARG_INFO(0, table)
+	ZEND_ARG_INFO(0, condition)
+ZEND_END_ARG_INFO()
+
 /* {{{ SimpleOrm_functions[]
  *
  * Every user visible function must have an entry in SimpleOrm_functions[].
@@ -85,6 +96,8 @@ const zend_function_entry SimpleOrm_methods[] = {
 	
 	PHP_ME(SimpleOrm, insert,	 	arginfo_insert, 		ZEND_ACC_PUBLIC)
 	PHP_ME(SimpleOrm, insertBatch,	arginfo_insert, 		ZEND_ACC_PUBLIC)
+	PHP_ME(SimpleOrm, update,		arginfo_update, 		ZEND_ACC_PUBLIC)
+	PHP_ME(SimpleOrm, delete,		arginfo_delete, 		ZEND_ACC_PUBLIC)
 	{NULL, NULL, NULL}
 };
 /* }}} */
@@ -255,12 +268,13 @@ PHP_METHOD(SimpleOrm, query)
 PHP_METHOD(SimpleOrm, exec)
 {
 	char *query;
-	int query_len, rows;
+	int query_len;
+	zval *rows;
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &query, &query_len) == FAILURE) {
 		return;
 	}
 	rows = pdo_exec(query);
-	RETURN_LONG(rows);
+	RETURN_ZVAL(rows, 1, 0);
 }
 /* }}} */
 
@@ -414,13 +428,13 @@ PHP_METHOD(SimpleOrm, find)
 }
 /* }}} */
 
-/* {{{ proto public SimpleOrm::insert(string query)
+/* {{{ proto public SimpleOrm::insert(string table_name, array data)
 */
 PHP_METHOD(SimpleOrm, insert)
 {
-	zval *insert, *action, *fields, *values, *self=NULL, *rows;
+	zval *insert, *action, *fields, *values, *self=NULL, *rows=NULL;
 	char *table;
-	char sql[30];
+	char *sql=NULL;
 	int table_len;
 	
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "sz", &table, &table_len, &values) == FAILURE) {
@@ -433,22 +447,24 @@ PHP_METHOD(SimpleOrm, insert)
 	if(Z_TYPE_P(values)==IS_ARRAY){
 		zval *fields, *value;
 		
+		MAKE_STD_ZVAL(rows);
 		fields=join(",", get_array_keys(values), 0);
 		value=join(",", values, 1);
-		sprintf(sql, "INSERT INTO `%s`(%s) VALUES (%s);", table, Z_STRVAL_P(fields), Z_STRVAL_P(value));
+		spprintf(&sql, 0, "INSERT INTO `%s`(%s) VALUES (%s);", table, Z_STRVAL_P(fields), Z_STRVAL_P(value));
 		rows=pdo_exec(sql);
-	}else{
-		
 	}
-	RETURN_ZVAL(rows, 1, 0);
+	
+	RETVAL_ZVAL(rows, 0, 0);
 }
 /* }}} */
 
+/* {{{ proto public SimpleOrm::insertBatch(string table_name, multi_array data)
+*/
 PHP_METHOD(SimpleOrm, insertBatch)
 {
-	zval *insert, *action, *fields, *values, *self=NULL, *rows, **element, *stmt, *table_name;
-	char sql[30], *table;
-	int table_len, query_len;
+	zval *values, *self=NULL, **element, *stmt, *table_name;
+	char *table;
+	int table_len, rows=0;
 	HashTable *value_hash;
 	HashPosition pos;
 	
@@ -466,8 +482,123 @@ PHP_METHOD(SimpleOrm, insertBatch)
 		zend_hash_move_forward_ex(value_hash, &pos)
 	) {
 		zend_call_method(&self, Z_OBJCE_P(self), NULL, ZEND_STRL("insert"), &stmt, 2, table_name, *element, NULL TSRMLS_CC);
+		if(Z_TYPE_P(stmt)!=IS_BOOL)
+			rows++;
 	}
+	RETVAL_LONG(rows);
 }
+/* }}} */
+
+/* {{{ proto public SimpleOrm::update(string table_name, array data)
+*/
+PHP_METHOD(SimpleOrm, update)
+{
+	zval *data, *where, *instance, **element, *stmt, *set;
+	char *table, *condition, *sql;
+	int table_len, condition_len;
+	char *buff;
+	
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "sz|s", &table, &table_len, &data, &condition, &condition_len) == FAILURE) {
+		return;
+	}
+	
+	if(ZEND_NUM_ARGS()>=3){
+		ssprintf(buff, 0, "WHERE %s", condition);
+		MAKE_STD_ZVAL(where);
+		ZVAL_STRING(where, buff, 0);
+	}else{
+		instance = zend_read_static_property(SimpleOrm_ce, ZEND_STRL("instance"), 1 TSRMLS_CC);
+		where = zend_read_property(SimpleOrm_ce, instance, ZEND_STRL("where"), 0 TSRMLS_CC);
+	}
+	buff=NULL;
+	
+	if(Z_TYPE_P(where)!=IS_NULL){
+		zval *piece=NULL;
+		HashTable *data_hash;
+		char *key;
+		int index;
+		
+		data_hash=Z_ARRVAL_P(data);
+		int nums = zend_hash_num_elements(data_hash);
+		
+		MAKE_STD_ZVAL(piece);
+		array_init_size(piece, nums);
+		
+		for (zend_hash_internal_pointer_reset(data_hash);
+			zend_hash_get_current_data(data_hash, (void **) &element) == SUCCESS;
+			zend_hash_move_forward(data_hash)
+		) {
+			if(zend_hash_get_current_key(data_hash, &key, &index, 0)==HASH_KEY_IS_STRING){
+				if (Z_TYPE_PP(element)==IS_STRING){
+					spprintf(&buff, 0, "%s='%s'", key, Z_STRVAL_PP(element));
+				}else{
+					spprintf(&buff, 0, "%s=%d", key, Z_LVAL_PP(element));
+				}
+				add_next_index_string(piece, buff, 1);
+			}
+		}
+		
+		set=join(",", piece, 0);
+		spprintf(&sql, 0, "UPDATE `%s` SET %s %s;", table, Z_STRVAL_P(set), Z_STRVAL_P(where));
+		stmt = pdo_exec(sql);
+	} else {
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "dangerous for update opration without condition!");
+		RETVAL_NULL();
+	}
+	
+	RETURN_ZVAL(stmt, 1, 0);
+}
+/* }}} */
+
+/* {{{ proto public SimpleOrm::delete(string table_name, array condition)
+*/
+PHP_METHOD(SimpleOrm, delete)
+{
+	zval *condition, *where, *instance, *p_key, *stmt;
+	char *sql, *buff, *table;
+	int table_len;
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s|z", &table, &table_len, &condition) == FAILURE) {
+		return;
+	}
+	
+	instance = zend_read_static_property(SimpleOrm_ce, ZEND_STRL("instance"), 1 TSRMLS_CC);
+	p_key=zend_read_property(SimpleOrm_ce, instance, ZEND_STRL("primary_key"), 0 TSRMLS_CC);
+	if (ZEND_NUM_ARGS()==1){
+		where = zend_read_property(SimpleOrm_ce, instance, ZEND_STRL("where"), 0 TSRMLS_CC);
+	} else {
+		switch(Z_TYPE_P(condition)){
+			case IS_LONG:
+				spprintf(&buff, 0, "WHERE %s=%d", Z_STRVAL_P(p_key), Z_LVAL_P(condition));
+				break;
+				
+			case IS_ARRAY:
+				condition=join(",", condition, 0);
+				spprintf(&buff, 0, "WHERE %s IN(%s)", Z_STRVAL_P(p_key), Z_STRVAL_P(condition));
+				break;
+				
+			case IS_STRING:
+				spprintf(&buff, 0, "WHERE %s", Z_STRVAL_P(condition));
+				break;
+				
+			default:
+				php_error_docref(NULL TSRMLS_CC, E_WARNING, "condition error!");
+				RETVAL_NULL();
+		}
+		MAKE_STD_ZVAL(where);
+		ZVAL_STRING(where, buff, 0);
+	}
+	
+	if (Z_TYPE_P(where)==IS_NULL){
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "dangerous for delete opration without condition!");
+		RETVAL_NULL();
+	}
+	
+	spprintf(&sql, 0, "DELETE FROM `%s` %s;", table, Z_STRVAL_P(where));
+	stmt = pdo_exec(sql);
+	
+	RETVAL_ZVAL(stmt, 0, 0);
+}
+/* }}} */
 
 PHP_SIMPLEORM_API zval * get_array_keys(zval * array TSRMLS_DC){
 	zval *keys, **element;
@@ -581,7 +712,6 @@ PHP_SIMPLEORM_API zval * join(char *delim, zval *arr, int type TSRMLS_DC)
 	return return_val;
 }
 
-
 PHP_SIMPLEORM_API zval * pdo_query(char *query TSRMLS_DC){
 	zval *pdo, *stmt, *instance, *sql;
 	
@@ -591,7 +721,7 @@ PHP_SIMPLEORM_API zval * pdo_query(char *query TSRMLS_DC){
 	instance = zend_read_static_property(SimpleOrm_ce, ZEND_STRL("instance"), 1 TSRMLS_CC);
 	pdo = zend_read_property(SimpleOrm_ce, instance, ZEND_STRL("pdo"), 0 TSRMLS_CC);
 	zend_call_method(&pdo, Z_OBJCE_P(pdo), NULL, ZEND_STRL("query"), &stmt, 1, sql, NULL TSRMLS_CC);
-	zval_ptr_dtor(sql);
+	zval_dtor(sql);
 	
 	if(Z_TYPE_P(stmt)==IS_BOOL){
 		stmt=pdo_errorInfo();

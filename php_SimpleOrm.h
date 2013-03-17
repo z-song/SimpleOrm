@@ -54,6 +54,8 @@ PHP_METHOD(SimpleOrm, order);
 PHP_METHOD(SimpleOrm, limit);
 PHP_METHOD(SimpleOrm, insert);
 PHP_METHOD(SimpleOrm, insertBatch);
+PHP_METHOD(SimpleOrm, update);
+PHP_METHOD(SimpleOrm, delete);
 
 PHP_SIMPLEORM_API zval * pdo_query(char * query TSRMLS_DC);
 PHP_SIMPLEORM_API zval * pdo_exec(char * query TSRMLS_DC);
