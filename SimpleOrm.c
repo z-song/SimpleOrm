@@ -23,7 +23,6 @@
 #endif
 
 #include "php.h"
-#include "ext/pdo/php_pdo.h"
 #include "php_ini.h"
 #include "ext/standard/info.h"
 #include "ext/standard/php_smart_str.h"
@@ -108,7 +107,7 @@ const zend_function_entry SimpleOrm_methods[] = {
 	PHP_ME(SimpleOrm, limit,	 	arginfo_string, 		ZEND_ACC_PUBLIC)
 	PHP_ME(SimpleOrm, top,	 		arginfo_int, 			ZEND_ACC_PUBLIC)
 	PHP_ME(SimpleOrm, end,	 		arginfo_int, 			ZEND_ACC_PUBLIC)
-	
+
 	PHP_ME(SimpleOrm, insert,	 	arginfo_insert, 		ZEND_ACC_PUBLIC)
 	PHP_ME(SimpleOrm, insertBatch,	arginfo_insert, 		ZEND_ACC_PUBLIC)
 	PHP_ME(SimpleOrm, update,		arginfo_update, 		ZEND_ACC_PUBLIC)
@@ -440,6 +439,8 @@ PHP_METHOD(SimpleOrm, find){
 }
 /* }}} */
 
+/* {{{ proto public SimpleOrm::top(int num)
+*/
 PHP_METHOD(SimpleOrm, top){
 	zval *self, *res;
 	int num;
@@ -460,7 +461,10 @@ PHP_METHOD(SimpleOrm, top){
 		 RETVAL_NULL();
 	}
 }
+/* }}} */
 
+/* {{{ proto public SimpleOrm::end(int num)
+*/
 PHP_METHOD(SimpleOrm, end){
 	zval *self, *res, *P_key;
 	int num;
@@ -485,6 +489,7 @@ PHP_METHOD(SimpleOrm, end){
 		RETVAL_NULL();
 	}
 }
+/* }}} */
 
 /* {{{ proto public SimpleOrm::insert(string table_name, array data)
 */
@@ -537,7 +542,7 @@ PHP_METHOD(SimpleOrm, insertBatch){
 		zend_hash_get_current_data_ex(value_hash, (void **)&element, &pos) == SUCCESS;
 		zend_hash_move_forward_ex(value_hash, &pos)
 	) {
-		zend_call_method(&self, Z_OBJCE_P(self), NULL, ZEND_STRL("insert"), &stmt, 2, table_name, *element, NULL TSRMLS_CC);
+		THIS("insert", &stmt, 2, table_name, *element);
 		if(Z_TYPE_P(stmt)!=IS_BOOL)
 			rows++;
 	}
@@ -674,7 +679,6 @@ PHP_METHOD(SimpleOrm, setAttribute){
 	}
 }
 /* }}} */
-
 
 /* {{{ proto public SimpleOrm::beginTransaction(voidn)
 */
@@ -831,6 +835,7 @@ PHP_SIMPLEORM_API zval * pdo_query(char *query TSRMLS_DC){
 		stmt=pdo_errorInfo();
 		return stmt;
 	}
+	zend_update_property_ex(Z_OBJCE_P(instance), instance, ZEND_STRL("data"), stmt TSRMLS_DC);
 	return stmt;
 }
 

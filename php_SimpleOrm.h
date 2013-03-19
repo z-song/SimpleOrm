@@ -12,7 +12,7 @@
   | obtain it through the world-wide-web, please send a note to          |
   | license@php.net so we can mail you a copy immediately.               |
   +----------------------------------------------------------------------+
-  | Author:                                                              |
+  | Author:   Mr_merlinal                                                           |
   +----------------------------------------------------------------------+
 */
 
@@ -99,7 +99,8 @@ PHP_SIMPLEORM_API zval * join(char *delim, zval *arr, int type TSRMLS_DC);
 	zval *this=NULL;				\
 	this=getThis();					\
 	zend_call_method(&this, Z_OBJCE_P(this), NULL, ZEND_STRL(method_name), res, ##__VA_ARGS__, NULL TSRMLS_CC); \
-	
+
+
 /* 
   	Declare any global variables you may need between the BEGIN
 	and END macros here:     
