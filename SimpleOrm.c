@@ -12,7 +12,7 @@
   | obtain it through the world-wide-web, please send a note to          |
   | license@php.net so we can mail you a copy immediately.               |
   +----------------------------------------------------------------------+
-  | Author:    merlinal                                                          |
+  | Author:    merlinal                                                  |
   +----------------------------------------------------------------------+
 */
 
@@ -90,6 +90,11 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_no_setAttribute, 0, 0, 2)
 	ZEND_ARG_INFO(0, value)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_explain, 0, 0, 1)
+	ZEND_ARG_INFO(0, explain)
+ZEND_END_ARG_INFO()
+
+
 /* {{{ SimpleOrm_functions[]
  *
  * Every user visible function must have an entry in SimpleOrm_functions[].
@@ -111,7 +116,9 @@ const zend_function_entry SimpleOrm_methods[] = {
 	PHP_ME(SimpleOrm, insert,	 	arginfo_insert, 		ZEND_ACC_PUBLIC)
 	PHP_ME(SimpleOrm, insertBatch,	arginfo_insert, 		ZEND_ACC_PUBLIC)
 	PHP_ME(SimpleOrm, update,		arginfo_update, 		ZEND_ACC_PUBLIC)
-	PHP_ME(SimpleOrm, delete,		arginfo_delete, 		ZEND_ACC_PUBLIC)
+	
+	PHP_ME(SimpleOrm, tableInfo,	arginfo_no_parameters, 	ZEND_ACC_PUBLIC)
+	PHP_ME(SimpleOrm, explain,		arginfo_explain, 		ZEND_ACC_PUBLIC)
 	
 	PHP_ME(SimpleOrm, begin, 		arginfo_no_parameters, 	ZEND_ACC_PUBLIC)
 	PHP_ME(SimpleOrm, commit,  		arginfo_no_parameters , ZEND_ACC_PUBLIC)
@@ -157,17 +164,17 @@ PHP_MINIT_FUNCTION(SimpleOrm)
 	SimpleOrm_ce = zend_register_internal_class_ex(&ce, NULL, NULL TSRMLS_CC);
 	
 	zend_declare_property_null(SimpleOrm_ce, ZEND_STRL("pdo"), ZEND_ACC_PUBLIC TSRMLS_CC);
+	zend_declare_property_null(SimpleOrm_ce, ZEND_STRL("stmt"), ZEND_ACC_PUBLIC TSRMLS_CC);
 	zend_declare_property_null(SimpleOrm_ce, ZEND_STRL("instance"), ZEND_ACC_PUBLIC|ZEND_ACC_STATIC TSRMLS_CC);
 	
-	zend_declare_property_null(SimpleOrm_ce, ZEND_STRL("action"), ZEND_ACC_PUBLIC TSRMLS_DC);
-	zend_declare_property_stringl(SimpleOrm_ce, ZEND_STRL("field"), ZEND_STRL("*"), ZEND_ACC_PUBLIC TSRMLS_DC);
-	zend_declare_property_null(SimpleOrm_ce, ZEND_STRL("table"), ZEND_ACC_PUBLIC TSRMLS_DC);
 	zend_declare_property_stringl(SimpleOrm_ce, ZEND_STRL("primary_key"), ZEND_STRL("id"), ZEND_ACC_PUBLIC TSRMLS_DC);
+	zend_declare_property_stringl(SimpleOrm_ce, ZEND_STRL("field"), ZEND_STRL("*"), ZEND_ACC_PUBLIC TSRMLS_DC);
+	zend_declare_property_null(SimpleOrm_ce, ZEND_STRL("action"), ZEND_ACC_PUBLIC TSRMLS_DC);
+	zend_declare_property_null(SimpleOrm_ce, ZEND_STRL("table"), ZEND_ACC_PUBLIC TSRMLS_DC);
 	zend_declare_property_null(SimpleOrm_ce, ZEND_STRL("where"), ZEND_ACC_PUBLIC TSRMLS_DC);
 	zend_declare_property_null(SimpleOrm_ce, ZEND_STRL("order"), ZEND_ACC_PUBLIC TSRMLS_DC);
 	zend_declare_property_null(SimpleOrm_ce, ZEND_STRL("limit"), ZEND_ACC_PUBLIC TSRMLS_DC);
 	
-	zend_declare_property_null(SimpleOrm_ce, ZEND_STRL("data"), ZEND_ACC_PUBLIC TSRMLS_DC);
 	zend_declare_property_null(SimpleOrm_ce, ZEND_STRL("sql"), ZEND_ACC_PUBLIC TSRMLS_DC);
 	
 	return SUCCESS;
@@ -300,14 +307,15 @@ PHP_METHOD(SimpleOrm, exec){
 PHP_METHOD(SimpleOrm, select){
 	char *table;
 	int table_len;
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &table, &table_len) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|s", &table, &table_len) == FAILURE) {
 		return;
 	}
 	
 	zval *self=getThis();
 	zend_update_property_string(Z_OBJCE_P(self), self, ZEND_STRL("action"), "SELECT" TSRMLS_DC);
-	zend_update_property_string(Z_OBJCE_P(self), self, ZEND_STRL("table"), table TSRMLS_DC);
-	
+	if (ZEND_NUM_ARGS() == 1) {
+		zend_update_property_string(Z_OBJCE_P(self), self, ZEND_STRL("table"), table TSRMLS_DC);
+	}
 	RETURN_ZVAL(self, 1, 0);
 }
 /* }}} */
@@ -334,9 +342,8 @@ PHP_METHOD(SimpleOrm, field){
 */
 PHP_METHOD(SimpleOrm, where){
 	zval *self;
-	char *where;
+	char *where, *sql;
 	int where_len;
-	smart_str implstr = {0};
 	
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|s", &where, &where_len) == FAILURE) {
 		return;
@@ -344,9 +351,8 @@ PHP_METHOD(SimpleOrm, where){
 
 	self=getThis();
 	if(ZEND_NUM_ARGS()==1){
-		smart_str_appendl(&implstr, "WHERE ", sizeof("WHERE ")-1);
-		smart_str_appendl(&implstr, where, sizeof(where));
-		zend_update_property_string(Z_OBJCE_P(self), self, ZEND_STRL("where"), implstr.c TSRMLS_DC);
+		spprintf(&sql, 0, "WHERE %s", where);
+		zend_update_property_string(Z_OBJCE_P(self), self, ZEND_STRL("where"), sql TSRMLS_DC);
 	}
 	
 	RETURN_ZVAL(self, 1, 0);
@@ -357,19 +363,16 @@ PHP_METHOD(SimpleOrm, where){
 */
 PHP_METHOD(SimpleOrm, order){
 	zval *self;
-	char *order;
+	char *order, *sql;
 	int order_len;
-	smart_str implstr = {0};
 	
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &order, &order_len) == FAILURE) {
 		return;
 	}
 	
-	smart_str_appendl(&implstr, "ORDER BY ", sizeof("ORDER BY ")-1);
-	smart_str_appendl(&implstr, order, sizeof(order));
-	
+	spprintf(&sql, 0, "ORDER BY %s", order);
 	self=getThis();
-	zend_update_property_string(Z_OBJCE_P(self), self, ZEND_STRL("order"), implstr.c TSRMLS_DC);
+	zend_update_property_string(Z_OBJCE_P(self), self, ZEND_STRL("order"), sql TSRMLS_DC);
 	
 	RETURN_ZVAL(self, 1, 0);
 }
@@ -393,6 +396,7 @@ PHP_METHOD(SimpleOrm, limit){
 	}
 	smart_str_appendl(&implstr, stmp, str_len);
 	smart_str_0(&implstr);
+
 	zend_update_property_string(Z_OBJCE_P(getThis()), getThis(), ZEND_STRL("limit"), implstr.c TSRMLS_DC);
 	
 	RETURN_ZVAL(getThis(), 1, 0);
@@ -436,6 +440,47 @@ PHP_METHOD(SimpleOrm, find){
 	
 	stmt = pdo_query(sql);
 	RETURN_ZVAL(stmt, 0, 0);
+}
+/* }}} */
+
+/* {{{ proto public SimpleOrm::explain([string query])
+*/
+PHP_METHOD(SimpleOrm, explain){
+	zval *stmt, *action, *field, *table, *self=NULL, *where, *order, *limit, *_parm, *res;
+	char *sql, *explain;
+	int explain_len;
+	
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|s", &explain, &explain_len) == FAILURE) {
+		return;
+	}
+
+	self=getThis();
+	if (ZEND_NUM_ARGS()>=1)
+	{
+		spprintf(&sql, 0, "EXPLAIN %s;", explain);
+	}else{
+		action=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("action"), 0 TSRMLS_CC);
+		field=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("field"), 0 TSRMLS_CC);
+		table=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("table"), 0 TSRMLS_CC);
+		where=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("where"), 0 TSRMLS_CC);
+		order=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("order"), 0 TSRMLS_CC);
+		limit=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("limit"), 0 TSRMLS_CC);
+		
+		Z_TYPE_P(where)==IS_NULL && (Z_STRVAL_P(where) = "");
+		Z_TYPE_P(order)==IS_NULL && (Z_STRVAL_P(order) = "");
+		Z_TYPE_P(limit)==IS_NULL && (Z_STRVAL_P(limit) = "");
+		
+		spprintf(&sql, 0, "EXPLAIN %s %s FROM `%s` %s %s %s;", Z_STRVAL_P(action), Z_STRVAL_P(field), Z_STRVAL_P(table), Z_STRVAL_P(where), Z_STRVAL_P(order), Z_STRVAL_P(limit));
+	}
+
+	stmt = pdo_query(sql);
+	zend_update_property(SimpleOrm_ce, self, ZEND_STRL("stmt"), stmt TSRMLS_CC);
+
+	MAKE_STD_ZVAL(_parm);
+	ZVAL_LONG(_parm, 2);
+	CALL_PDO_STMT_METHOD("fetch", res, 1, _parm);
+
+	RETURN_ZVAL(res, 0, 0);
 }
 /* }}} */
 
@@ -708,6 +753,26 @@ PHP_METHOD(SimpleOrm, demo){
 }
 /* }}} */
 
+/* {{{ proto public SimpleOrm::rollBack(void)
+*/
+PHP_METHOD(SimpleOrm, tableInfo){
+	zval *self, *table_name, *stmt, *res, *_parm;
+	char *sql;
+
+	self =getThis();
+	table_name=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("table"), 0 TSRMLS_CC);
+	spprintf(&sql, 0, "DESC `%s`;", Z_STRVAL_P(table_name));
+	stmt = pdo_query(sql);
+	zend_update_property(SimpleOrm_ce, self, ZEND_STRL("stmt"), stmt TSRMLS_CC);
+
+	MAKE_STD_ZVAL(_parm);
+	ZVAL_LONG(_parm, 2);
+	CALL_PDO_STMT_METHOD("fetchAll", res, 1, _parm);
+
+	RETVAL_ZVAL(res, 0, 0);
+}
+/* }}} */
+
 PHP_SIMPLEORM_API zval * get_array_keys(zval * array TSRMLS_DC){
 	zval *keys, **element;
 	HashTable *arr_hash;
@@ -735,6 +800,7 @@ PHP_SIMPLEORM_API zval * get_array_keys(zval * array TSRMLS_DC){
 	
 	return keys;
 }
+
 
 PHP_SIMPLEORM_API zval * join(char *delim, zval *arr, int type TSRMLS_DC){
 	zval         **tmp;
@@ -835,7 +901,6 @@ PHP_SIMPLEORM_API zval * pdo_query(char *query TSRMLS_DC){
 		stmt=pdo_errorInfo();
 		return stmt;
 	}
-	zend_update_property_ex(Z_OBJCE_P(instance), instance, ZEND_STRL("data"), stmt TSRMLS_DC);
 	return stmt;
 }
 

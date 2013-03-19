@@ -59,6 +59,9 @@ PHP_METHOD(SimpleOrm, delete);
 PHP_METHOD(SimpleOrm, top);
 PHP_METHOD(SimpleOrm, end);
 
+PHP_METHOD(SimpleOrm, tableInfo);
+PHP_METHOD(SimpleOrm, explain);
+
 PHP_METHOD(SimpleOrm, begin);
 PHP_METHOD(SimpleOrm, commit);
 PHP_METHOD(SimpleOrm, rollBack);
@@ -72,27 +75,38 @@ PHP_SIMPLEORM_API zval * pdo_errorInfo();
 PHP_SIMPLEORM_API zval * get_array_keys(zval * array TSRMLS_DC);
 PHP_SIMPLEORM_API zval * join(char *delim, zval *arr, int type TSRMLS_DC);
 
-#define CALL_PDO_METHOD(method_name) 	\
+#define CALL_PDO_METHOD(method_name, ...) 	\
 	zval *pdo, *success, *instance;		\
-	instance = zend_read_static_property(SimpleOrm_ce, ZEND_STRL("instance"), 1 TSRMLS_CC);			\
-	pdo = zend_read_property(SimpleOrm_ce, instance, ZEND_STRL("pdo"), 0 TSRMLS_CC);				\
-	zend_call_method(&pdo, NULL, NULL, ZEND_STRL(method_name), &success, NULL TSRMLS_DC);	\
-																									\
-	if (!success || EG(exception)) {                                           \
-		zval_ptr_dtor(&success);                                              	   \
+	instance = zend_read_static_property(SimpleOrm_ce, ZEND_STRL("instance"), 1 TSRMLS_CC); \
+	pdo = zend_read_property(SimpleOrm_ce, instance, ZEND_STRL("pdo"), 0 TSRMLS_CC);		\
+	zend_call_method(&pdo, NULL, NULL, ZEND_STRL(method_name), &success, ##__VA_ARGS__, NULL TSRMLS_DC);	\
+	if (!success || EG(exception)) {												\
+		zval_ptr_dtor(&success);													\
 		php_error_docref(NULL TSRMLS_CC, E_ERROR, "PDO method method_name fiald!");	\
-	}                                                                          \
-	convert_to_boolean(success); 											   \
-	if (!success){                                                             \
-		RETURN_FALSE;                                                          \
-	}                                                                          \
-	if (Z_BVAL_P(success) == 1) {                                              \
-		zval_ptr_dtor(&success);                                               \
-		RETURN_TRUE;                                                           \
-	}else{                                                                     \
-		zval_ptr_dtor(&success);                                               \
-		RETURN_FALSE;                                                          \
-	}																		   \
+	}																				\
+	convert_to_boolean(success); 													\
+	if (!success){																	\
+		RETURN_FALSE;																\
+	}																				\
+	if (Z_BVAL_P(success) == 1) {													\
+		zval_ptr_dtor(&success);													\
+		RETURN_TRUE;																\
+	}else{																			\
+		zval_ptr_dtor(&success);													\
+		RETURN_FALSE;																\
+	}
+
+
+#define CALL_PDO_STMT_METHOD(method_name, res, ...) 	\
+	zval *_stmt, *instance;						\
+	instance = zend_read_static_property(SimpleOrm_ce, ZEND_STRL("instance"), 1 TSRMLS_CC); \
+	_stmt = zend_read_property(SimpleOrm_ce, instance, ZEND_STRL("stmt"), 0 TSRMLS_CC);		\
+	zend_call_method(&stmt, NULL, NULL, ZEND_STRL(method_name), &res, ##__VA_ARGS__, NULL TSRMLS_DC);	\
+	if (!res || EG(exception)) {														\
+		zval_ptr_dtor(&res);															\
+		php_error_docref(NULL TSRMLS_CC, E_ERROR, "PDO method method_name fiald!");		\
+	}																					\
+																						\
 
 	
 #define THIS(method_name, res, ...)	\
