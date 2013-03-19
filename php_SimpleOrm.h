@@ -61,6 +61,7 @@ PHP_METHOD(SimpleOrm, end);
 
 PHP_METHOD(SimpleOrm, tableInfo);
 PHP_METHOD(SimpleOrm, explain);
+PHP_METHOD(SimpleOrm, total);
 
 PHP_METHOD(SimpleOrm, begin);
 PHP_METHOD(SimpleOrm, commit);

@@ -119,6 +119,7 @@ const zend_function_entry SimpleOrm_methods[] = {
 	
 	PHP_ME(SimpleOrm, tableInfo,	arginfo_no_parameters, 	ZEND_ACC_PUBLIC)
 	PHP_ME(SimpleOrm, explain,		arginfo_explain, 		ZEND_ACC_PUBLIC)
+	PHP_ME(SimpleOrm, total,		arginfo_no_parameters, 	ZEND_ACC_PUBLIC)
 	
 	PHP_ME(SimpleOrm, begin, 		arginfo_no_parameters, 	ZEND_ACC_PUBLIC)
 	PHP_ME(SimpleOrm, commit,  		arginfo_no_parameters , ZEND_ACC_PUBLIC)
@@ -302,7 +303,7 @@ PHP_METHOD(SimpleOrm, exec){
 }
 /* }}} */
 
-/* {{{ proto public SimpleOrm::select(string table)
+/* {{{ proto public SimpleOrm::select([string table])
 */
 PHP_METHOD(SimpleOrm, select){
 	char *table;
@@ -338,7 +339,7 @@ PHP_METHOD(SimpleOrm, field){
 }
 /* }}} */
 
-/* {{{ proto public SimpleOrm::where(string where)
+/* {{{ proto public SimpleOrm::where([string where])
 */
 PHP_METHOD(SimpleOrm, where){
 	zval *self;
@@ -378,32 +379,29 @@ PHP_METHOD(SimpleOrm, order){
 }
 /* }}} */
 
-/* {{{ proto public SimpleOrm::limit(int offset, int length)
+/* {{{ proto public SimpleOrm::limit(int offset[, int length])
 */
 PHP_METHOD(SimpleOrm, limit){
-	smart_str implstr = {0};
 	long offset, length;
 	int str_len;
+	char *sql;
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l|l", &offset, &length) == FAILURE) {
 		return;
 	}
 	
-	char stmp[MAX_LENGTH_OF_LONG + 1];
 	if (ZEND_NUM_ARGS()==1){
-		str_len = slprintf(stmp, sizeof(stmp), "LIMIT %d", offset);
+		spprintf(&sql, 0, "LIMIT %d", offset);
 	}else if(ZEND_NUM_ARGS()==2){
-		str_len = slprintf(stmp, sizeof(stmp), "LIMIT %d,%d", offset, length);
+		spprintf(&sql, 0, "LIMIT %d,%d", offset, length);
 	}
-	smart_str_appendl(&implstr, stmp, str_len);
-	smart_str_0(&implstr);
 
-	zend_update_property_string(Z_OBJCE_P(getThis()), getThis(), ZEND_STRL("limit"), implstr.c TSRMLS_DC);
+	zend_update_property_string(Z_OBJCE_P(getThis()), getThis(), ZEND_STRL("limit"), sql TSRMLS_DC);
 	
 	RETURN_ZVAL(getThis(), 1, 0);
 }
 /* }}} */
 
-/* {{{ proto public SimpleOrm::find(string query)
+/* {{{ proto public SimpleOrm::find([string query])
 */
 PHP_METHOD(SimpleOrm, find){
 	zval *stmt, *query, *action, *field, *table, *primary_key, *self=NULL, *where, *order, *limit;
@@ -443,6 +441,35 @@ PHP_METHOD(SimpleOrm, find){
 }
 /* }}} */
 
+
+/* {{{ proto public SimpleOrm::tatal()
+*/
+PHP_METHOD(SimpleOrm, total){
+	zval *stmt, *table, *self=NULL, *where, *order, *limit, *res, **count;
+	char *sql;
+
+	self=getThis();
+	table=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("table"), 0 TSRMLS_CC);
+	where=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("where"), 0 TSRMLS_CC);
+	order=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("order"), 0 TSRMLS_CC);
+	limit=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("limit"), 0 TSRMLS_CC);
+	
+	Z_TYPE_P(where)==IS_NULL && (Z_STRVAL_P(where) = "");
+	Z_TYPE_P(order)==IS_NULL && (Z_STRVAL_P(order) = "");
+	Z_TYPE_P(limit)==IS_NULL && (Z_STRVAL_P(limit) = "");
+		
+	spprintf(&sql, 0, "SELECT COUNT(1) AS COUNT FROM `%s` %s %s %s;", Z_STRVAL_P(table), Z_STRVAL_P(where), Z_STRVAL_P(order), Z_STRVAL_P(limit));
+
+	stmt = pdo_query(sql);
+	zend_update_property(SimpleOrm_ce, self, ZEND_STRL("stmt"), stmt TSRMLS_CC);
+	CALL_PDO_STMT_METHOD("fetch", res);
+
+	zend_hash_index_find(Z_ARRVAL_P(res), 0, (void **)&count);
+	convert_to_long_ex(count);
+	RETURN_LONG(Z_LVAL_PP(count));
+}
+/* }}} */
+
 /* {{{ proto public SimpleOrm::explain([string query])
 */
 PHP_METHOD(SimpleOrm, explain){
@@ -459,7 +486,7 @@ PHP_METHOD(SimpleOrm, explain){
 	{
 		spprintf(&sql, 0, "EXPLAIN %s;", explain);
 	}else{
-		action=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("action"), 0 TSRMLS_CC);
+		action	=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("action"), 0 TSRMLS_CC);
 		field=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("field"), 0 TSRMLS_CC);
 		table=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("table"), 0 TSRMLS_CC);
 		where=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("where"), 0 TSRMLS_CC);
@@ -595,7 +622,7 @@ PHP_METHOD(SimpleOrm, insertBatch){
 }
 /* }}} */
 
-/* {{{ proto public SimpleOrm::update(string table_name, array data)
+/* {{{ proto public SimpleOrm::update(string table_name, array data[, string where])
 */
 PHP_METHOD(SimpleOrm, update){
 	zval *data, *where, *instance, **element, *stmt, *set;
@@ -655,7 +682,7 @@ PHP_METHOD(SimpleOrm, update){
 }
 /* }}} */
 
-/* {{{ proto public SimpleOrm::delete(string table_name, array condition)
+/* {{{ proto public SimpleOrm::delete(string table_name[, array condition])
 */
 PHP_METHOD(SimpleOrm, delete){
 	zval *condition, *where, *instance, *p_key, *stmt;
@@ -899,7 +926,6 @@ PHP_SIMPLEORM_API zval * pdo_query(char *query TSRMLS_DC){
 	
 	if(Z_TYPE_P(stmt)==IS_BOOL){
 		stmt=pdo_errorInfo();
-		return stmt;
 	}
 	return stmt;
 }
@@ -916,7 +942,6 @@ PHP_SIMPLEORM_API zval * pdo_exec(char * query TSRMLS_DC){
 	
 	if(Z_TYPE_P(rows)==IS_BOOL){
 		rows=pdo_errorInfo();
-		return rows;
 	}
 	
 	return rows;
