@@ -443,7 +443,7 @@ PHP_METHOD(SimpleOrm, find){
 	}
 	
 	stmt = pdo_query(sql);
-	RETURN_ZVAL(stmt, 0, 0);
+	RETURN_ZVAL(stmt, 1, 0);
 }
 /* }}} */
 
@@ -513,7 +513,7 @@ PHP_METHOD(SimpleOrm, page){
 	add_assoc_long(page_info, "total_page", ceil(Z_LVAL_P(total)/pagenum));
 	zend_update_property(SimpleOrm_ce, self, ZEND_STRL("page_info"), page_info TSRMLS_CC);
 
-	RETURN_ZVAL(stmt, 0, 0);
+	RETURN_ZVAL(stmt, 1, 0);
 }
 /* }}} */
 
@@ -554,7 +554,7 @@ PHP_METHOD(SimpleOrm, explain){
 	ZVAL_LONG(_parm, 2);
 	CALL_PDO_STMT_METHOD("fetch", res, 1, _parm);
 
-	RETURN_ZVAL(res, 0, 0);
+	RETURN_ZVAL(res, 1, 0);
 }
 /* }}} */
 
@@ -613,27 +613,30 @@ PHP_METHOD(SimpleOrm, end){
 /* {{{ proto public SimpleOrm::insert(string table_name, array data)
 */
 PHP_METHOD(SimpleOrm, insert){
-	zval *action, *fields, *values, *self=NULL, *rows=NULL;
-	char *table;
+	zval *action, *fields, *values, *self=NULL, *rows=NULL, *table, *value;
+	char *table_name;
 	char *sql=NULL;
-	int table_len;
 	
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "sz", &table, &table_len, &values) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z|z", &table, &values) == FAILURE) {
 		return;
 	}
 
 	self=getThis();
 	zend_update_property_string(Z_OBJCE_P(self), self, ZEND_STRL("action"), "INSERT" TSRMLS_DC);
 	
-	if(Z_TYPE_P(values)==IS_ARRAY){
-		zval *fields, *value;
-		
-		MAKE_STD_ZVAL(rows);
+	if (Z_TYPE_P(table)==IS_ARRAY && ZEND_NUM_ARGS()==1){
+		fields=join(",", get_array_keys(table), 0);
+		value=join(",", table, 1);
+		GET_THIS_PROPERTY(self, "table", table);
+		table_name=Z_STRVAL_P(table);
+	}else if(Z_TYPE_P(table)==IS_STRING && Z_TYPE_P(values)==IS_ARRAY){
+		table_name=Z_STRVAL_P(table);
 		fields=join(",", get_array_keys(values), 0);
 		value=join(",", values, 1);
-		spprintf(&sql, 0, "INSERT INTO `%s`(%s) VALUES (%s);", table, Z_STRVAL_P(fields), Z_STRVAL_P(value));
-		rows=pdo_exec(sql);
 	}
+	spprintf(&sql, 0, "INSERT INTO `%s`(%s) VALUES (%s);", table_name, Z_STRVAL_P(fields), Z_STRVAL_P(value));
+	MAKE_STD_ZVAL(rows);
+	rows=pdo_exec(sql);
 	
 	RETVAL_ZVAL(rows, 0, 0);
 }
