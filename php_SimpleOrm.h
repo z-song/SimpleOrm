@@ -62,6 +62,7 @@ PHP_METHOD(SimpleOrm, end);
 PHP_METHOD(SimpleOrm, tableInfo);
 PHP_METHOD(SimpleOrm, explain);
 PHP_METHOD(SimpleOrm, total);
+PHP_METHOD(SimpleOrm, page);
 
 PHP_METHOD(SimpleOrm, begin);
 PHP_METHOD(SimpleOrm, commit);
@@ -110,11 +111,15 @@ PHP_SIMPLEORM_API zval * join(char *delim, zval *arr, int type TSRMLS_DC);
 																						\
 
 	
-#define THIS(method_name, res, ...)	\
+#define THIS_METHOD(method_name, res, ...)	\
 	zval *this=NULL;				\
 	this=getThis();					\
 	zend_call_method(&this, Z_OBJCE_P(this), NULL, ZEND_STRL(method_name), res, ##__VA_ARGS__, NULL TSRMLS_CC); \
 
+#define GET_THIS_PROPERTY(this, property_name, res) res=zend_read_property(Z_OBJCE_P(this), this, ZEND_STRL(property_name), 0 TSRMLS_CC);
+	
+
+//#define SET_THIS_PROPERTY(this, property_name, value) res=zend_read_property(Z_OBJCE_P(this), this, ZEND_STRL(property_name), 0 TSRMLS_CC);
 
 /* 
   	Declare any global variables you may need between the BEGIN

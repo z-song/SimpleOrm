@@ -94,6 +94,11 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_explain, 0, 0, 1)
 	ZEND_ARG_INFO(0, explain)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_page, 0, 0, 2)
+	ZEND_ARG_INFO(0, page)
+	ZEND_ARG_INFO(0, pagenum)
+ZEND_END_ARG_INFO()
+
 
 /* {{{ SimpleOrm_functions[]
  *
@@ -120,6 +125,7 @@ const zend_function_entry SimpleOrm_methods[] = {
 	PHP_ME(SimpleOrm, tableInfo,	arginfo_no_parameters, 	ZEND_ACC_PUBLIC)
 	PHP_ME(SimpleOrm, explain,		arginfo_explain, 		ZEND_ACC_PUBLIC)
 	PHP_ME(SimpleOrm, total,		arginfo_no_parameters, 	ZEND_ACC_PUBLIC)
+	PHP_ME(SimpleOrm, page,			arginfo_page, 			ZEND_ACC_PUBLIC)
 	
 	PHP_ME(SimpleOrm, begin, 		arginfo_no_parameters, 	ZEND_ACC_PUBLIC)
 	PHP_ME(SimpleOrm, commit,  		arginfo_no_parameters , ZEND_ACC_PUBLIC)
@@ -170,7 +176,7 @@ PHP_MINIT_FUNCTION(SimpleOrm)
 	
 	zend_declare_property_stringl(SimpleOrm_ce, ZEND_STRL("primary_key"), ZEND_STRL("id"), ZEND_ACC_PUBLIC TSRMLS_DC);
 	zend_declare_property_stringl(SimpleOrm_ce, ZEND_STRL("field"), ZEND_STRL("*"), ZEND_ACC_PUBLIC TSRMLS_DC);
-	zend_declare_property_null(SimpleOrm_ce, ZEND_STRL("action"), ZEND_ACC_PUBLIC TSRMLS_DC);
+	zend_declare_property_stringl(SimpleOrm_ce, ZEND_STRL("action"), ZEND_STRL("SELECT"), ZEND_ACC_PUBLIC TSRMLS_DC);
 	zend_declare_property_null(SimpleOrm_ce, ZEND_STRL("table"), ZEND_ACC_PUBLIC TSRMLS_DC);
 	zend_declare_property_null(SimpleOrm_ce, ZEND_STRL("where"), ZEND_ACC_PUBLIC TSRMLS_DC);
 	zend_declare_property_null(SimpleOrm_ce, ZEND_STRL("order"), ZEND_ACC_PUBLIC TSRMLS_DC);
@@ -412,13 +418,13 @@ PHP_METHOD(SimpleOrm, find){
 	}
 	
 	self=getThis();
-	action=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("action"), 0 TSRMLS_CC);
-	field=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("field"), 0 TSRMLS_CC);
-	primary_key=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("primary_key"), 0 TSRMLS_CC);
-	table=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("table"), 0 TSRMLS_CC);
-	where=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("where"), 0 TSRMLS_CC);
-	order=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("order"), 0 TSRMLS_CC);
-	limit=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("limit"), 0 TSRMLS_CC);
+	GET_THIS_PROPERTY(self, "action", action);
+	GET_THIS_PROPERTY(self, "field", field);
+	GET_THIS_PROPERTY(self, "primary_key", primary_key);
+	GET_THIS_PROPERTY(self, "table", table);
+	GET_THIS_PROPERTY(self, "where", where);
+	GET_THIS_PROPERTY(self, "order", order);
+	GET_THIS_PROPERTY(self, "limit", limit);
 	
 	Z_TYPE_P(where)==IS_NULL && (Z_STRVAL_P(where) = "");
 	Z_TYPE_P(order)==IS_NULL && (Z_STRVAL_P(order) = "");
@@ -441,7 +447,6 @@ PHP_METHOD(SimpleOrm, find){
 }
 /* }}} */
 
-
 /* {{{ proto public SimpleOrm::tatal()
 */
 PHP_METHOD(SimpleOrm, total){
@@ -449,10 +454,11 @@ PHP_METHOD(SimpleOrm, total){
 	char *sql;
 
 	self=getThis();
-	table=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("table"), 0 TSRMLS_CC);
-	where=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("where"), 0 TSRMLS_CC);
-	order=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("order"), 0 TSRMLS_CC);
-	limit=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("limit"), 0 TSRMLS_CC);
+	GET_THIS_PROPERTY(self, "table", table);
+	GET_THIS_PROPERTY(self, "where", where);
+	GET_THIS_PROPERTY(self, "order", order);
+	GET_THIS_PROPERTY(self, "limit", limit);
+
 	
 	Z_TYPE_P(where)==IS_NULL && (Z_STRVAL_P(where) = "");
 	Z_TYPE_P(order)==IS_NULL && (Z_STRVAL_P(order) = "");
@@ -467,6 +473,47 @@ PHP_METHOD(SimpleOrm, total){
 	zend_hash_index_find(Z_ARRVAL_P(res), 0, (void **)&count);
 	convert_to_long_ex(count);
 	RETURN_LONG(Z_LVAL_PP(count));
+}
+/* }}} */
+
+/* {{{ proto public SimpleOrm::page(int page[, int pagenum])
+*/
+PHP_METHOD(SimpleOrm, page){
+	zval *stmt, *table, *self=NULL, *where, *order, *action, *field, *primary_key, *total, *page_info;
+	char *sql, *limit;
+	ulong page, pagenum=10;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l|l", &page, &pagenum)==FAILURE){
+		return;
+	}
+	self=getThis();
+	THIS_METHOD("total", &total);
+	spprintf(&limit, 0 ,"LIMIT %d,%d", (page-1)*pagenum, pagenum);
+	zend_update_property_string(Z_OBJCE_P(self), self, ZEND_STRL("limit"), limit TSRMLS_DC);
+
+	GET_THIS_PROPERTY(self, "action", action);
+	GET_THIS_PROPERTY(self, "field", field);
+	GET_THIS_PROPERTY(self, "primary_key", primary_key);
+	GET_THIS_PROPERTY(self, "table", table);
+	GET_THIS_PROPERTY(self, "where", where);
+	GET_THIS_PROPERTY(self, "order", order);
+
+	Z_TYPE_P(where)==IS_NULL && (Z_STRVAL_P(where) = "");
+	Z_TYPE_P(order)==IS_NULL && (Z_STRVAL_P(order) = "");
+
+	spprintf(&sql, 0, "%s %s FROM `%s` %s %s %s;",Z_STRVAL_P(action), Z_STRVAL_P(field), Z_STRVAL_P(table), Z_STRVAL_P(where), Z_STRVAL_P(order), limit);
+
+	stmt = pdo_query(sql);
+	zend_update_property(SimpleOrm_ce, self, ZEND_STRL("stmt"), stmt TSRMLS_CC);
+
+	MAKE_STD_ZVAL(page_info);
+	array_init(page_info);
+	add_assoc_long(page_info, "total", Z_LVAL_P(total));
+	add_assoc_long(page_info, "current", page);
+	add_assoc_long(page_info, "total_page", ceil(Z_LVAL_P(total)/pagenum));
+	zend_update_property(SimpleOrm_ce, self, ZEND_STRL("page_info"), page_info TSRMLS_CC);
+
+	RETURN_ZVAL(stmt, 0, 0);
 }
 /* }}} */
 
@@ -486,12 +533,12 @@ PHP_METHOD(SimpleOrm, explain){
 	{
 		spprintf(&sql, 0, "EXPLAIN %s;", explain);
 	}else{
-		action	=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("action"), 0 TSRMLS_CC);
-		field=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("field"), 0 TSRMLS_CC);
-		table=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("table"), 0 TSRMLS_CC);
-		where=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("where"), 0 TSRMLS_CC);
-		order=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("order"), 0 TSRMLS_CC);
-		limit=zend_read_property(Z_OBJCE_P(self), self, ZEND_STRL("limit"), 0 TSRMLS_CC);
+		GET_THIS_PROPERTY(self, "action", action);
+		GET_THIS_PROPERTY(self, "field", field);
+		GET_THIS_PROPERTY(self, "table", table);
+		GET_THIS_PROPERTY(self, "where", where);
+		GET_THIS_PROPERTY(self, "order", order);
+		GET_THIS_PROPERTY(self, "limit", limit);
 		
 		Z_TYPE_P(where)==IS_NULL && (Z_STRVAL_P(where) = "");
 		Z_TYPE_P(order)==IS_NULL && (Z_STRVAL_P(order) = "");
@@ -525,7 +572,7 @@ PHP_METHOD(SimpleOrm, top){
 	zend_update_property_string(Z_OBJCE_P(self), self, ZEND_STRL("order"), "" TSRMLS_DC);
 	zend_update_property_string(Z_OBJCE_P(self), self, ZEND_STRL("limit"), limit TSRMLS_DC);
 	
-	THIS("find", &res);
+	THIS_METHOD("find", &res);
 	
 	if(Z_TYPE_P(res)!=IS_BOOL){
 		RETVAL_ZVAL(res, 0, 0);
@@ -553,7 +600,7 @@ PHP_METHOD(SimpleOrm, end){
 	spprintf(&limit, 0 ,"LIMIT %d", num);
 	zend_update_property_string(Z_OBJCE_P(self), self, ZEND_STRL("limit"), limit TSRMLS_DC);
 	
-	THIS("find", &res);
+	THIS_METHOD("find", &res);
 	
 	if(Z_TYPE_P(res)!=IS_BOOL){
 		RETVAL_ZVAL(res, 0, 0);
@@ -566,7 +613,7 @@ PHP_METHOD(SimpleOrm, end){
 /* {{{ proto public SimpleOrm::insert(string table_name, array data)
 */
 PHP_METHOD(SimpleOrm, insert){
-	zval *insert, *action, *fields, *values, *self=NULL, *rows=NULL;
+	zval *action, *fields, *values, *self=NULL, *rows=NULL;
 	char *table;
 	char *sql=NULL;
 	int table_len;
@@ -614,7 +661,7 @@ PHP_METHOD(SimpleOrm, insertBatch){
 		zend_hash_get_current_data_ex(value_hash, (void **)&element, &pos) == SUCCESS;
 		zend_hash_move_forward_ex(value_hash, &pos)
 	) {
-		THIS("insert", &stmt, 2, table_name, *element);
+		THIS_METHOD("insert", &stmt, 2, table_name, *element);
 		if(Z_TYPE_P(stmt)!=IS_BOOL)
 			rows++;
 	}
