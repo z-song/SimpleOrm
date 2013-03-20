@@ -99,8 +99,7 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_page, 0, 0, 2)
 	ZEND_ARG_INFO(0, pagenum)
 ZEND_END_ARG_INFO()
 
-
-/* {{{ SimpleOrm_functions[]
+/* {{{ SimpleOrm_methods[]
  *
  * Every user visible function must have an entry in SimpleOrm_functions[].
  */
@@ -135,21 +134,29 @@ const zend_function_entry SimpleOrm_methods[] = {
 };
 /* }}} */
 
+static zend_module_dep pdo_SimpleOrm_deps[] = {
+    ZEND_MOD_REQUIRED("pdo")
+    {NULL, NULL, NULL}
+};
+
 /* {{{ SimpleOrm_module_entry
  */
 zend_module_entry SimpleOrm_module_entry = {
-#if ZEND_MODULE_API_NO >= 20010901
+#if ZEND_MODULE_API_NO >= 220050617
+    STANDARD_MODULE_HEADER_EX, NULL,
+    pdo_SimpleOrm_deps,
+#elif ZEND_MODULE_API_NO >= 20010901
 	STANDARD_MODULE_HEADER,
 #endif
 	"SimpleOrm",
 	NULL,
 	PHP_MINIT(SimpleOrm),
 	PHP_MSHUTDOWN(SimpleOrm),
-	PHP_RINIT(SimpleOrm),		/* Replace with NULL if there's nothing to do at request start */
-	PHP_RSHUTDOWN(SimpleOrm),	/* Replace with NULL if there's nothing to do at request end */
+	PHP_RINIT(SimpleOrm),
+	PHP_RSHUTDOWN(SimpleOrm),
 	PHP_MINFO(SimpleOrm),
 #if ZEND_MODULE_API_NO >= 20010901
-	"0.1", /* Replace with version number for your extension */
+	"0.1", 
 #endif
 	STANDARD_MODULE_PROPERTIES
 };
@@ -192,14 +199,10 @@ PHP_MINIT_FUNCTION(SimpleOrm)
  */
 PHP_MSHUTDOWN_FUNCTION(SimpleOrm)
 {
-	/* uncomment this line if you have INI entries
-	UNREGISTER_INI_ENTRIES();
-	*/
 	return SUCCESS;
 }
 /* }}} */
 
-/* Remove if there's nothing to do at request start */
 /* {{{ PHP_RINIT_FUNCTION
  */
 PHP_RINIT_FUNCTION(SimpleOrm)
@@ -208,7 +211,6 @@ PHP_RINIT_FUNCTION(SimpleOrm)
 }
 /* }}} */
 
-/* Remove if there's nothing to do at request end */
 /* {{{ PHP_RSHUTDOWN_FUNCTION
  */
 PHP_RSHUTDOWN_FUNCTION(SimpleOrm)
@@ -223,10 +225,6 @@ PHP_MINFO_FUNCTION(SimpleOrm){
 	php_info_print_table_start();
 	php_info_print_table_header(2, "SimpleOrm support", "enabled");
 	php_info_print_table_end();
-
-	/* Remove comments if you have entries in php.ini
-	DISPLAY_INI_ENTRIES();
-	*/
 }
 /* }}} */
 
@@ -277,7 +275,6 @@ PHP_METHOD(SimpleOrm, getInstance){
 	}else{
 		RETURN_ZVAL(instance, 1, 0);
 	}
-	return;
 }
 /* }}} */
 
@@ -418,13 +415,13 @@ PHP_METHOD(SimpleOrm, find){
 	}
 	
 	self=getThis();
-	GET_THIS_PROPERTY(self, "action", action);
-	GET_THIS_PROPERTY(self, "field", field);
-	GET_THIS_PROPERTY(self, "primary_key", primary_key);
-	GET_THIS_PROPERTY(self, "table", table);
-	GET_THIS_PROPERTY(self, "where", where);
-	GET_THIS_PROPERTY(self, "order", order);
-	GET_THIS_PROPERTY(self, "limit", limit);
+	GET_PROPERTY(self, "action", action);
+	GET_PROPERTY(self, "field", field);
+	GET_PROPERTY(self, "primary_key", primary_key);
+	GET_PROPERTY(self, "table", table);
+	GET_PROPERTY(self, "where", where);
+	GET_PROPERTY(self, "order", order);
+	GET_PROPERTY(self, "limit", limit);
 	
 	Z_TYPE_P(where)==IS_NULL && (Z_STRVAL_P(where) = "");
 	Z_TYPE_P(order)==IS_NULL && (Z_STRVAL_P(order) = "");
@@ -454,10 +451,10 @@ PHP_METHOD(SimpleOrm, total){
 	char *sql;
 
 	self=getThis();
-	GET_THIS_PROPERTY(self, "table", table);
-	GET_THIS_PROPERTY(self, "where", where);
-	GET_THIS_PROPERTY(self, "order", order);
-	GET_THIS_PROPERTY(self, "limit", limit);
+	GET_PROPERTY(self, "table", table);
+	GET_PROPERTY(self, "where", where);
+	GET_PROPERTY(self, "order", order);
+	GET_PROPERTY(self, "limit", limit);
 
 	
 	Z_TYPE_P(where)==IS_NULL && (Z_STRVAL_P(where) = "");
@@ -491,12 +488,12 @@ PHP_METHOD(SimpleOrm, page){
 	spprintf(&limit, 0 ,"LIMIT %d,%d", (page-1)*pagenum, pagenum);
 	zend_update_property_string(Z_OBJCE_P(self), self, ZEND_STRL("limit"), limit TSRMLS_DC);
 
-	GET_THIS_PROPERTY(self, "action", action);
-	GET_THIS_PROPERTY(self, "field", field);
-	GET_THIS_PROPERTY(self, "primary_key", primary_key);
-	GET_THIS_PROPERTY(self, "table", table);
-	GET_THIS_PROPERTY(self, "where", where);
-	GET_THIS_PROPERTY(self, "order", order);
+	GET_PROPERTY(self, "action", action);
+	GET_PROPERTY(self, "field", field);
+	GET_PROPERTY(self, "primary_key", primary_key);
+	GET_PROPERTY(self, "table", table);
+	GET_PROPERTY(self, "where", where);
+	GET_PROPERTY(self, "order", order);
 
 	Z_TYPE_P(where)==IS_NULL && (Z_STRVAL_P(where) = "");
 	Z_TYPE_P(order)==IS_NULL && (Z_STRVAL_P(order) = "");
@@ -512,6 +509,7 @@ PHP_METHOD(SimpleOrm, page){
 	add_assoc_long(page_info, "current", page);
 	add_assoc_long(page_info, "total_page", ceil(Z_LVAL_P(total)/pagenum));
 	zend_update_property(SimpleOrm_ce, self, ZEND_STRL("page_info"), page_info TSRMLS_CC);
+	zval_ptr_dtor(&page_info);
 
 	RETURN_ZVAL(stmt, 1, 0);
 }
@@ -533,12 +531,12 @@ PHP_METHOD(SimpleOrm, explain){
 	{
 		spprintf(&sql, 0, "EXPLAIN %s;", explain);
 	}else{
-		GET_THIS_PROPERTY(self, "action", action);
-		GET_THIS_PROPERTY(self, "field", field);
-		GET_THIS_PROPERTY(self, "table", table);
-		GET_THIS_PROPERTY(self, "where", where);
-		GET_THIS_PROPERTY(self, "order", order);
-		GET_THIS_PROPERTY(self, "limit", limit);
+		GET_PROPERTY(self, "action", action);
+		GET_PROPERTY(self, "field", field);
+		GET_PROPERTY(self, "table", table);
+		GET_PROPERTY(self, "where", where);
+		GET_PROPERTY(self, "order", order);
+		GET_PROPERTY(self, "limit", limit);
 		
 		Z_TYPE_P(where)==IS_NULL && (Z_STRVAL_P(where) = "");
 		Z_TYPE_P(order)==IS_NULL && (Z_STRVAL_P(order) = "");
@@ -553,6 +551,7 @@ PHP_METHOD(SimpleOrm, explain){
 	MAKE_STD_ZVAL(_parm);
 	ZVAL_LONG(_parm, 2);
 	CALL_PDO_STMT_METHOD("fetch", res, 1, _parm);
+	zval_ptr_dtor(&_parm);
 
 	RETURN_ZVAL(res, 1, 0);
 }
@@ -627,7 +626,7 @@ PHP_METHOD(SimpleOrm, insert){
 	if (Z_TYPE_P(table)==IS_ARRAY && ZEND_NUM_ARGS()==1){
 		fields=join(",", get_array_keys(table), 0);
 		value=join(",", table, 1);
-		GET_THIS_PROPERTY(self, "table", table);
+		GET_PROPERTY(self, "table", table);
 		table_name=Z_STRVAL_P(table);
 	}else if(Z_TYPE_P(table)==IS_STRING && Z_TYPE_P(values)==IS_ARRAY){
 		table_name=Z_STRVAL_P(table);
@@ -668,6 +667,7 @@ PHP_METHOD(SimpleOrm, insertBatch){
 		if(Z_TYPE_P(stmt)!=IS_BOOL)
 			rows++;
 	}
+	zval_ptr_dtor(&table_name);
 	RETVAL_LONG(rows);
 }
 /* }}} */
@@ -698,7 +698,7 @@ PHP_METHOD(SimpleOrm, update){
 		zval *piece=NULL;
 		HashTable *data_hash;
 		char *key;
-		int index;
+		ulong index;
 		
 		data_hash=Z_ARRVAL_P(data);
 		int nums = zend_hash_num_elements(data_hash);
@@ -723,6 +723,8 @@ PHP_METHOD(SimpleOrm, update){
 		set=join(",", piece, 0);
 		spprintf(&sql, 0, "UPDATE `%s` SET %s %s;", table, Z_STRVAL_P(set), Z_STRVAL_P(where));
 		stmt = pdo_exec(sql);
+		zval_ptr_dtor(&where);
+		zval_ptr_dtor(&piece);
 	} else {
 		php_error_docref(NULL TSRMLS_CC, E_WARNING, "dangerous for update opration without condition!");
 		RETVAL_NULL();
@@ -845,11 +847,14 @@ PHP_METHOD(SimpleOrm, tableInfo){
 	MAKE_STD_ZVAL(_parm);
 	ZVAL_LONG(_parm, 2);
 	CALL_PDO_STMT_METHOD("fetchAll", res, 1, _parm);
+	zval_ptr_dtor(&_parm);
 
 	RETVAL_ZVAL(res, 0, 0);
 }
 /* }}} */
 
+/* {{{ zval * get_array_keys(zval * array)
+*/
 PHP_SIMPLEORM_API zval * get_array_keys(zval * array TSRMLS_DC){
 	zval *keys, **element;
 	HashTable *arr_hash;
@@ -877,8 +882,10 @@ PHP_SIMPLEORM_API zval * get_array_keys(zval * array TSRMLS_DC){
 	
 	return keys;
 }
+/* }}} */
 
-
+/* {{{ zval * join(char *delim, zval *arr, int type)
+*/
 PHP_SIMPLEORM_API zval * join(char *delim, zval *arr, int type TSRMLS_DC){
 	zval         **tmp;
 	HashPosition   pos;
@@ -961,7 +968,10 @@ PHP_SIMPLEORM_API zval * join(char *delim, zval *arr, int type TSRMLS_DC){
 	
 	return return_val;
 }
+/* }}} */
 
+/* {{{ zval * pdo_query(char *query)
+*/
 PHP_SIMPLEORM_API zval * pdo_query(char *query TSRMLS_DC){
 	zval *pdo, *stmt, *instance, *sql;
 	
@@ -979,7 +989,10 @@ PHP_SIMPLEORM_API zval * pdo_query(char *query TSRMLS_DC){
 	}
 	return stmt;
 }
+/* }}} */
 
+/* {{{ zval * pdo_exec(char * query)
+*/
 PHP_SIMPLEORM_API zval * pdo_exec(char * query TSRMLS_DC){
 	zval *pdo, *stmt, *instance, *sql, *rows;
 
@@ -996,7 +1009,10 @@ PHP_SIMPLEORM_API zval * pdo_exec(char * query TSRMLS_DC){
 	
 	return rows;
 }
+/* }}} */
 
+/* {{{ zval * pdo_errorCode(void)
+*/
 PHP_SIMPLEORM_API zval * pdo_errorCode(){
 	zval *pdo, *code, *instance;
 	instance = zend_read_static_property(SimpleOrm_ce, ZEND_STRL("instance"), 1 TSRMLS_CC);
@@ -1005,7 +1021,10 @@ PHP_SIMPLEORM_API zval * pdo_errorCode(){
 	
 	return code;
 }
+/* }}} */
 
+/* {{{ zval * pdo_errorInfo(void)
+*/
 PHP_SIMPLEORM_API zval * pdo_errorInfo(){
 	zval *pdo, *info, *instance;
 	zend_function ** fn;
@@ -1015,6 +1034,7 @@ PHP_SIMPLEORM_API zval * pdo_errorInfo(){
 	
 	return info;
 }
+/* }}} */
 
 /*
  * Local variables:

@@ -116,10 +116,10 @@ PHP_SIMPLEORM_API zval * join(char *delim, zval *arr, int type TSRMLS_DC);
 	this=getThis();					\
 	zend_call_method(&this, Z_OBJCE_P(this), NULL, ZEND_STRL(method_name), res, ##__VA_ARGS__, NULL TSRMLS_CC); \
 
-#define GET_THIS_PROPERTY(this, property_name, res) res=zend_read_property(Z_OBJCE_P(this), this, ZEND_STRL(property_name), 0 TSRMLS_CC);
+#define GET_PROPERTY(this, property_name, res) res=zend_read_property(Z_OBJCE_P(this), this, ZEND_STRL(property_name), 0 TSRMLS_CC);
 	
 
-//#define SET_THIS_PROPERTY(this, property_name, value) res=zend_read_property(Z_OBJCE_P(this), this, ZEND_STRL(property_name), 0 TSRMLS_CC);
+//#define SET_PROPERTY(this, property_name, value) res=zend_read_property(Z_OBJCE_P(this), this, ZEND_STRL(property_name), 0 TSRMLS_CC);
 
 /* 
   	Declare any global variables you may need between the BEGIN
