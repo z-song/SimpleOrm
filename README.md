@@ -17,10 +17,19 @@ to your php.ini
 
 #Usage
 
-###SimpleOrm::getInstance($pdo)
+###SimpleOrm::getInstance(PDO $pdo)
 ```php
 <?php
 $dsn = "mysql:host=localhost;dbname=sakila";
 $pdo= new PDO($dsn, 'root', '');
 $obj=SimpleOrm::getInstance($pdo);
+```
+###SimpleOrm::query(string $query)
+```php
+$obj->query('select * from record');
+```
+
+###SimpleOrm::exec(string $query)
+```php
+$obj->query('insert into record (id, name, age)');
 ```
