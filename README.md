@@ -64,9 +64,49 @@ $obj->select('actor')->find([1,2,4,5,6]);
 $obj->select('actor')->field('actor_id,first_name,last_name');
 ```
 
-###SimpleOrm::where()
+###SimpleOrm::where(string $where)
 ```php
 <?php
 //set where condition 
 $obj->select('actor')->field('actor_id,first_name,last_name')->where("where last_name='GABLE'");
+```
+
+###SimpleOrm::order(string $order)
+```php
+<?php
+//set order 
+$obj->select('actor')->where("where last_name='GABLE'")->order('order by first_name desc');
+```
+
+###SimpleOrm::limit(int $limit[, $offset])
+```php
+<?php
+//set limit 
+$obj->select('actor')->where("where last_name='GABLE'")->limit(10);
+//or
+$obj->select('actor')->where("where last_name='GABLE'")->limit(10, 10);
+```
+
+###SimpleOrm::top(int $top)
+```php
+<?php
+//get top record
+$obj->select('actor')->top(10);
+```
+
+###SimpleOrm::end(int $end)
+```php
+<?php
+//get last record
+$obj->select('actor')->end(10);
+```
+
+###SimpleOrm::insert(string $table, array $data)
+```php
+<?php
+//insert one record
+$obj->insert('actor', array(...));
+//or
+$obj->table='actor';
+$obj->insert(array(...));
 ```
